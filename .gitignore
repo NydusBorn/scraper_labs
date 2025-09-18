@@ -12,3 +12,4 @@ wheels/
 .ropeproject
 uv.lock
 .idea
+.scrapy

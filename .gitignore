@@ -10,7 +10,5 @@ wheels/
 .venv
 
 .ropeproject
-dataset
-intermediary_dataset
 uv.lock
 .idea

@@ -1,3 +1,5 @@
+from codecs import ignore_errors
+
 import scrapy
 
 import os
@@ -16,19 +18,20 @@ class review_spider(scrapy.Spider):
 
     def parse(self, response):
         total_pages = int(response.css("a[class*='last']::attr(href)").get().split("/")[-2])
-        os.mkdir("intermediate_dataset")
+        if not os.path.exists("intermediate_dataset"):
+            os.mkdir("intermediate_dataset")
         for page in range(1, total_pages + 1):
             url = f"https://otzovik.com/reviews/online_fashion_shop_wildberries_ru/{page}/"
             yield scrapy.Request(url, callback=self.parse_page)
+            break
     
     def parse_page(self, response: scrapy.http.Response):
         review_bases = response.xpath("//div[@itemprop='review']")
         for review in review_bases:
             full_review_url = review.css("a.review-title::attr(href)").get()
-            print(full_review_url)
-            break
             if full_review_url:
                 yield scrapy.Request(f"https://otzovik.com{full_review_url}", callback=self.parse_review)
+                break
         
     def parse_review(self, response: scrapy.http.Response):
         stars_raw = response.css("html > body > div:nth-of-type(2) > div > div > div > div > div:nth-of-type(4) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > span").get()
@@ -82,5 +85,5 @@ class review_spider(scrapy.Spider):
         review["likes"] = likes
         review["comments"] = comments
         print(review)
-        with open(f"intermediate_dataset/{response.url}.json", "w") as f:
+        with open(f"intermediate_dataset/{response.url.split("/")[-1].split(".")[0]}.json", "w") as f:
             f.write(json.dumps(review, ensure_ascii=False, indent=2))

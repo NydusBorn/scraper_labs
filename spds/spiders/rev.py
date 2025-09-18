@@ -10,31 +10,39 @@ import json
 
 base_url = "https://otzovik.com/reviews/online_fashion_shop_wildberries_ru/"
 
+downloaded_reviews = {x.split(".")[0] for x in os.listdir("intermediate_dataset")}
+
+
 class review_spider(scrapy.Spider):
     name = "review_spider"
     start_urls = [base_url]
-    
-    review_counter = 0
 
     def parse(self, response):
-        total_pages = int(response.css("a[class*='last']::attr(href)").get().split("/")[-2])
         if not os.path.exists("intermediate_dataset"):
             os.mkdir("intermediate_dataset")
+        total_pages = int(
+            response.css("a[class*='last']::attr(href)").get().split("/")[-2]
+        )
         for page in range(1, total_pages + 1):
             url = f"https://otzovik.com/reviews/online_fashion_shop_wildberries_ru/{page}/"
-            yield scrapy.Request(url, callback=self.parse_page)
-            break
-    
+            yield scrapy.Request(
+                url,
+                callback=self.parse_page,
+            )
+
     def parse_page(self, response: scrapy.http.Response):
         review_bases = response.xpath("//div[@itemprop='review']")
         for review in review_bases:
             full_review_url = review.css("a.review-title::attr(href)").get()
             if full_review_url:
-                yield scrapy.Request(f"https://otzovik.com{full_review_url}", callback=self.parse_review)
-                break
-        
+                yield scrapy.Request(
+                    f"https://otzovik.com{full_review_url}", callback=self.parse_review
+                )
+
     def parse_review(self, response: scrapy.http.Response):
-        stars_raw = response.css("html > body > div:nth-of-type(2) > div > div > div > div > div:nth-of-type(4) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > span").get()
+        stars_raw = response.css(
+            "html > body > div:nth-of-type(2) > div > div > div > div > div:nth-of-type(4) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > span"
+        ).get()
         stars = re.findall(r">(.*?)</", stars_raw)[0]
         title_raw = response.css("span[class='summary']").get()
         title = re.findall(r">(.*?)</", title_raw)[0]
@@ -46,7 +54,7 @@ class review_spider(scrapy.Spider):
         review_descr = ""
         writing = False
         while review_descr_raw != "":
-            if review_descr_raw.startswith("tion\">"):
+            if review_descr_raw.startswith('tion">'):
                 writing = True
                 review_descr_raw = review_descr_raw[6:]
             elif review_descr_raw.startswith("<br>"):
@@ -66,12 +74,16 @@ class review_spider(scrapy.Spider):
         year_usage_raw = response.css("table").get()
         year_usage = "2" + re.findall(r"<td>2(.*?)</td>\n", year_usage_raw)[0]
         recommendation_raw = response.css("table").get()
-        recommendation = re.findall(r"\">(.*?)</td></tr>\n        </table>", recommendation_raw)[0]
+        recommendation = re.findall(
+            r"\">(.*?)</td></tr>\n        </table>", recommendation_raw
+        )[0]
         date_posted_raw = response.css("span[class^='review-postdate'] span").get()
         date_posted = re.findall(r">(.*?)</", date_posted_raw)[0]
         likes_raw = response.css("span[class*='review-yes'] span").get()
         likes = re.findall(r">(.*?)</", likes_raw)[0]
-        comments_raw = response.css("a[class='review-btn review-comments tooltip-top'] span").get()
+        comments_raw = response.css(
+            "a[class='review-btn review-comments tooltip-top'] span"
+        ).get()
         comments = re.findall(r">(.*?)</", comments_raw)[0]
         review = {}
         review["title"] = title
@@ -85,5 +97,12 @@ class review_spider(scrapy.Spider):
         review["likes"] = likes
         review["comments"] = comments
         print(review)
-        with open(f"intermediate_dataset/{response.url.split("/")[-1].split(".")[0]}.json", "w") as f:
-            f.write(json.dumps(review, ensure_ascii=False, indent=2))
+        if not downloaded_reviews.__contains__(
+            response.url.split("/")[-1].split(".")[0]
+        ):
+            with open(
+                f"intermediate_dataset/{response.url.split('/')[-1].split('.')[0]}.json",
+                "w",
+            ) as f:
+                f.write(json.dumps(review, ensure_ascii=False, indent=2))
+            downloaded_reviews.add(response.url.split("/")[-1].split(".")[0])

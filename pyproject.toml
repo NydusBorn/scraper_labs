@@ -5,5 +5,13 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "scrapy"
+    "scrapy",
+    "scrapy-rotating-proxies-ng",
+    "scrapy-ua-rotator",
+    "fake-useragent",
+    "marimo",
+    "pandas",
+    "polars",
+    "jupyter",
+    "pandas-stubs"
 ]

@@ -73,15 +73,30 @@ class review_spider(scrapy.Spider):
                 review_descr_raw = review_descr_raw[1:]
             else:
                 review_descr_raw = review_descr_raw[1:]
-        year_usage_raw = response.css("table").get()
+        table_props_raw = response.css("table > tr")
+        table_prop_keys = []
+        table_prop_values = []
+        for prop in table_props_raw:
+            table_prop_keys.append(prop.css("td:nth-of-type(1)::text").get())
+            table_prop_values.append(prop.css("td:nth-of-type(2)::text").get())
+        table_props = dict(zip(table_prop_keys, table_prop_values))
         try:
-            year_usage = "2" + re.findall(r"<td>2(.*?)</td>\n", year_usage_raw)[0]
+            year_usage = table_props["Год пользования услугами"]
         except:
             year_usage = ""
-        recommendation_raw = response.css("table").get()
-        recommendation = re.findall(
-            r"\">(.*?)</td></tr>\n        </table>", recommendation_raw
-        )[0]
+        try:
+            recommendation = table_props["Рекомендую друзьям"]
+        except:
+            recommendation = ""
+        time_usage_raw = response.css("span[class='owning-time']").get()
+        if time_usage_raw:
+            time_usage = re.findall(r">(.*?)</", time_usage_raw)[0]
+        else:
+            time_usage = ""
+        try:
+            price = table_props["Стоимость"]
+        except:
+            price = ""
         date_posted_raw = response.css("span[class^='review-postdate'] span").get()
         date_posted = re.findall(r">(.*?)</", date_posted_raw)[0]
         likes_raw = response.css("span[class*='review-yes'] span").get()
@@ -98,6 +113,8 @@ class review_spider(scrapy.Spider):
         review["review_descr"] = review_descr
         review["year_usage"] = year_usage
         review["recommendation"] = recommendation
+        review["time_usage"] = time_usage
+        review["price"] = price
         review["date_posted"] = date_posted
         review["likes"] = likes
         review["comments"] = comments

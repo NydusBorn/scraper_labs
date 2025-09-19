@@ -27,7 +27,7 @@ ROBOTSTXT_OBEY = False
 # Concurrency and throttling settings
 # CONCURRENT_REQUESTS = 1
 # CONCURRENT_REQUESTS_PER_DOMAIN = 1
-DOWNLOAD_DELAY = 10
+DOWNLOAD_DELAY = 5
 
 # Disable cookies (enabled by default)
 # COOKIES_ENABLED = False
@@ -73,20 +73,20 @@ DOWNLOAD_DELAY = 10
 
 # Enable or disable downloader middlewares
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-# DOWNLOADER_MIDDLEWARES = {
-#     'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None,
-#     'scrapy.downloadermiddlewares.retry.RetryMiddleware': None,
-#     'rotating_proxies.middlewares.RotatingProxyMiddleware': 610,
-#     'rotating_proxies.middlewares.BanDetectionMiddleware': 620,
-#     'scrapy_ua_rotator.middleware.RandomUserAgentMiddleware': 400,
-#     'scrapy_ua_rotator.middleware.RetryUserAgentMiddleware': 550,
-# }
-#
-# USERAGENT_PROVIDERS = [
-#     'scrapy_ua_rotator.providers.FakeUserAgentProvider',  # Primary provider using the fake-useragent library
-#     'scrapy_ua_rotator.providers.FakerProvider',          # Fallback provider that generates synthetic UAs via Faker
-#     'scrapy_ua_rotator.providers.FixedUserAgentProvider', # Final fallback: uses the static USER_AGENT setting
-# ]
+DOWNLOADER_MIDDLEWARES = {
+    'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None,
+    'scrapy.downloadermiddlewares.retry.RetryMiddleware': None,
+    # 'rotating_proxies.middlewares.RotatingProxyMiddleware': 610,
+    # 'rotating_proxies.middlewares.BanDetectionMiddleware': 620,
+    'scrapy_ua_rotator.middleware.RandomUserAgentMiddleware': 400,
+    'scrapy_ua_rotator.middleware.RetryUserAgentMiddleware': 550,
+}
+
+USERAGENT_PROVIDERS = [
+    'scrapy_ua_rotator.providers.FakeUserAgentProvider',  # Primary provider using the fake-useragent library
+    'scrapy_ua_rotator.providers.FakerProvider',          # Fallback provider that generates synthetic UAs via Faker
+    'scrapy_ua_rotator.providers.FixedUserAgentProvider', # Final fallback: uses the static USER_AGENT setting
+]
 
 # Enable or disable extensions
 # See https://docs.scrapy.org/en/latest/topics/extensions.html
@@ -118,7 +118,7 @@ DOWNLOAD_DELAY = 10
 HTTPCACHE_ENABLED = True
 HTTPCACHE_EXPIRATION_SECS = 0
 HTTPCACHE_DIR = "httpcache"
-HTTPCACHE_IGNORE_HTTP_CODES = []
+HTTPCACHE_IGNORE_HTTP_CODES = [507]
 HTTPCACHE_STORAGE = "scrapy.extensions.httpcache.FilesystemCacheStorage"
 
 # Set settings whose default value is deprecated to a future-proof value

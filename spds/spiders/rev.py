@@ -9,7 +9,8 @@ import threading
 import json
 
 base_url = "https://otzovik.com/reviews/online_fashion_shop_wildberries_ru/"
-
+if not os.path.exists("intermediate_dataset"):
+    os.mkdir("intermediate_dataset")
 downloaded_reviews = {x.split(".")[0] for x in os.listdir("intermediate_dataset")}
 
 
@@ -18,8 +19,6 @@ class review_spider(scrapy.Spider):
     start_urls = [base_url]
 
     def parse(self, response):
-        if not os.path.exists("intermediate_dataset"):
-            os.mkdir("intermediate_dataset")
         total_pages = int(
             response.css("a[class*='last']::attr(href)").get().split("/")[-2]
         )
@@ -63,6 +62,9 @@ class review_spider(scrapy.Spider):
             elif review_descr_raw.startswith("</script>\n</div></div>"):
                 writing = True
                 review_descr_raw = review_descr_raw[21:]
+            elif review_descr_raw.startswith("</p>"):
+                writing = True
+                review_descr_raw = review_descr_raw[4:]
             elif review_descr_raw.startswith("<"):
                 writing = False
                 review_descr_raw = review_descr_raw[1:]
@@ -72,7 +74,10 @@ class review_spider(scrapy.Spider):
             else:
                 review_descr_raw = review_descr_raw[1:]
         year_usage_raw = response.css("table").get()
-        year_usage = "2" + re.findall(r"<td>2(.*?)</td>\n", year_usage_raw)[0]
+        try:
+            year_usage = "2" + re.findall(r"<td>2(.*?)</td>\n", year_usage_raw)[0]
+        except:
+            year_usage = ""
         recommendation_raw = response.css("table").get()
         recommendation = re.findall(
             r"\">(.*?)</td></tr>\n        </table>", recommendation_raw
@@ -96,10 +101,10 @@ class review_spider(scrapy.Spider):
         review["date_posted"] = date_posted
         review["likes"] = likes
         review["comments"] = comments
-        print(review)
         if not downloaded_reviews.__contains__(
             response.url.split("/")[-1].split(".")[0]
         ):
+            print(review)
             with open(
                 f"intermediate_dataset/{response.url.split('/')[-1].split('.')[0]}.json",
                 "w",

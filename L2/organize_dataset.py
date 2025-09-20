@@ -79,9 +79,11 @@ def init_database(db_path):
     conn.commit()
     return conn
 
-if __name__ == "__main__":
+def organize():
     dataset_path = Path("../L1/intermediate_dataset")
     db_path = "reviews.db"
+    if os.path.exists(db_path):
+        os.remove(db_path)
 
     # Initialize database
     conn = init_database(db_path)
@@ -119,3 +121,6 @@ if __name__ == "__main__":
 
     conn.commit()
     conn.close()
+
+if __name__ == "__main__":
+    organize()

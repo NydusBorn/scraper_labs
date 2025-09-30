@@ -9,9 +9,10 @@ import threading
 import json
 
 base_url = "https://otzovik.com/reviews/online_fashion_shop_wildberries_ru/"
-if not os.path.exists("intermediate_dataset"):
-    os.mkdir("intermediate_dataset")
-downloaded_reviews = {x.split(".")[0] for x in os.listdir("intermediate_dataset")}
+DATA_DIR = os.environ.get("INTERMEDIATE_DATASET_DIR", "intermediate_dataset")
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR, exist_ok=True)
+downloaded_reviews = {x.split(".")[0] for x in os.listdir(DATA_DIR)}
 
 
 class review_spider(scrapy.Spider):
@@ -123,7 +124,7 @@ class review_spider(scrapy.Spider):
         ):
             print(review)
             with open(
-                f"intermediate_dataset/{response.url.split('/')[-1].split('.')[0]}.json",
+                os.path.join(DATA_DIR, f"{response.url.split('/')[-1].split('.')[0]}.json"),
                 "w",
             ) as f:
                 f.write(json.dumps(review, ensure_ascii=False, indent=2))

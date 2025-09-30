@@ -1,0 +1,5 @@
+[tasks.dev]
+run = "WEBKIT_DISABLE_DMABUF_RENDERER=1 bunx tauri dev"
+
+[tasks.build]
+run = "NO_STRIP=true bunx tauri build"

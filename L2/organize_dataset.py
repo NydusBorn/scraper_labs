@@ -48,7 +48,7 @@ def read_json_files(directory):
     for json_file in json_files:
         with open(json_file, "r", encoding="utf-8") as f:
             data.append(json.load(f))
-        data[-1]["link"] = str(f"https://otzovik.com/{json_file.name.split(".")[0]}.html")
+        data[-1]["link"] = f"https://otzovik.com/{json_file.name.split('.')[0]}.html"
     return data
 
 
@@ -79,9 +79,9 @@ def init_database(db_path):
     conn.commit()
     return conn
 
-def organize():
-    dataset_path = Path("../L1/intermediate_dataset")
-    db_path = "reviews.db"
+def organize(dataset_path: str | Path = "../L1/intermediate_dataset", db_path: str | Path = "reviews.db"):
+    dataset_path = Path(dataset_path)
+    db_path = str(db_path)
     if os.path.exists(db_path):
         os.remove(db_path)
 

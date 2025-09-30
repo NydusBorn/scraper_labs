@@ -13,5 +13,7 @@ dependencies = [
     "pandas",
     "polars",
     "jupyter",
-    "pandas-stubs"
+    "pandas-stubs",
+    "fastapi",
+    "uvicorn"
 ]

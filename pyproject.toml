@@ -3,7 +3,7 @@ name = "scraper-labs"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = "==3.13.*"
 dependencies = [
     "scrapy",
     "scrapy-rotating-proxies-ng",
@@ -15,5 +15,6 @@ dependencies = [
     "jupyter",
     "pandas-stubs",
     "fastapi",
-    "uvicorn"
+    "uvicorn",
+    "natasha"
 ]

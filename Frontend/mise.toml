@@ -1,5 +1,7 @@
 [tasks.dev]
-run = "WEBKIT_DISABLE_DMABUF_RENDERER=1 bunx tauri dev"
+env = { "WEBKIT_DISABLE_DMABUF_RENDERER" = "1" }
+run = "bunx tauri dev"
 
 [tasks.build]
-run = "NO_STRIP=true bunx tauri build"
+env = { "NO_STRIP"="true" }
+run = "bunx tauri build"

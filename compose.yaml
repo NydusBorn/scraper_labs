@@ -1,0 +1,10 @@
+services:
+  server:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "11001:11001"
+    volumes:
+      - ./L1/intermediate_dataset:/intermediate:Z
+      - ./L2/reviews.db:/app/reviews.db:Z
+      - ./.scrapy:/app/.scrapy:Z

@@ -153,7 +153,9 @@ def start_scraping(payload: StartScrapingRequest):
 
         # Build environment with target dataset directory for the spider
         env = os.environ.copy()
-        env["INTERMEDIATE_DATASET_DIR"] = str(intermediate_dir)
+        if not env.__contains__("INTERMEDIATE_DATASET_DIR") or env["INTERMEDIATE_DATASET_DIR"] is None:
+            env["INTERMEDIATE_DATASET_DIR"] = str(intermediate_dir)
+            _append_log(f"[server] using INTERMEDIATE_DATASET_DIR={intermediate_dir} for scraper")
 
         # Launch the downloader as a subprocess, capturing stdout+stderr
         cmd = [sys.executable, str(Path(__file__).resolve().parents[1] / "L1" / "download_reviews.py")]
@@ -223,7 +225,16 @@ def organize(payload: OrganizeRequest):
         from L2.organize_dataset import organize as organize_fn
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to import organizer: {e}")
-
+    
+    env = os.environ.copy()
+    
+    if env.__contains__("INTERMEDIATE_DATASET_DIR") and env["INTERMEDIATE_DATASET_DIR"] is not None:
+        payload.input_dir = env["INTERMEDIATE_DATASET_DIR"]
+        _append_log(f"[server] using INTERMEDIATE_DATASET_DIR={payload.input_dir} from environment")
+    if env.__contains__("REVIEWS_DB") and env["REVIEWS_DB"] is not None:
+        payload.output_db = env["REVIEWS_DB"]
+        _append_log(f"[server] using REVIEWS_DB={payload.output_db} from environment")
+    
     input_dir = Path(payload.input_dir).expanduser().resolve()
     output_db = Path(payload.output_db).expanduser().resolve()
 
@@ -252,4 +263,4 @@ def root():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, port=11001, reload=False, log_level="debug")
+    uvicorn.run(app, port=11001, host="0.0.0.0", reload=False, log_level="warning")

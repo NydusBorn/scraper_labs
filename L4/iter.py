@@ -17,6 +17,12 @@ class bi_directional_iterator:
             self.index -= 1
             return self.inner[self.index]
 
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return self.next()
+
 if __name__ == "__main__":
     a = bi_directional_iterator(range(1,5))
     print(a.next())

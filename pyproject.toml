@@ -16,5 +16,7 @@ dependencies = [
     "pandas-stubs",
     "fastapi",
     "uvicorn",
-    "natasha"
+    "natasha",
+    "plotly",
+    "nltk"
 ]

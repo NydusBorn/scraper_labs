@@ -13,6 +13,11 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+import sqlite3
+import re
+from collections import Counter
+import plotly.graph_objects as go
+import plotly.io as pio
 
 # --- Logging buffer capturing ---
 # We maintain a global ring buffer with recent stdout/stderr lines from both the
@@ -72,6 +77,9 @@ if not isinstance(sys.stderr, _StdoutInterceptor):
 _scraper_proc: Optional[subprocess.Popen] = None
 _scraper_reader_thread: Optional[threading.Thread] = None
 _scraper_lock = threading.Lock()
+
+# Last organized DB path cached for reuse (charts)
+_last_db_path: Optional[Path] = None
 
 
 def _reader_target(pipe, proc_desc: str):
@@ -252,7 +260,211 @@ def organize(payload: OrganizeRequest):
         _append_log(f"[server] organize failed: {e}")
         raise HTTPException(status_code=500, detail=f"organize failed: {e}")
 
+    global _last_db_path
+    _last_db_path = output_db
     return OrganizeResponse(status="ok", output_db=str(output_db))
+
+
+def _resolve_db_path(db_param: Optional[str]) -> Path:
+    env = os.environ.copy()
+    if db_param:
+        return Path(db_param).expanduser().resolve()
+    if _last_db_path is not None:
+        return _last_db_path
+    if env.get("REVIEWS_DB"):
+        return Path(env["REVIEWS_DB"]).expanduser().resolve()
+    # Fallback default next to project root
+    return Path(__file__).resolve().parents[1] / "data" / "out" / "scraper.db"
+
+
+def _open_conn(db_path: Path) -> sqlite3.Connection:
+    if not db_path.exists():
+        raise HTTPException(status_code=400, detail=f"DB not found: {db_path}")
+    return sqlite3.connect(str(db_path))
+
+
+def _tokenize(text: str) -> list[str]:
+    if not text:
+        return []
+    tokens = re.findall(r"[\w\-]+", text.lower(), flags=re.UNICODE)
+    # simple filter: drop short tokens
+    return [t for t in tokens if len(t) > 2 and not t.isdigit()]
+
+
+_RU_STOP = {
+    # minimal RU stopword set; not exhaustive
+    "и","в","во","не","что","он","на","я","с","со","как","а","то","все","она","так","его","но","да","ты","к","у","же","вы","за","бы","по","только","ее","мне","было","вот","от","меня","еще","нет","о","из","ему","теперь","когда","даже","ну","вдруг","ли","если","уже","или","ни","быть","был","него","до","вас","нибудь","опять","уж","вам","ведь","там","потом","себя","ничего","ей","может","они","тут","где","есть","надо","ней","для","мы","тебя","их","чем","была","сам","чтоб","без","будто","чего","раз","тоже","себе","под","будет","ж","тогда","кто","этот","того","потому","этого","какой","совсем","ним","здесь","этом","один","почти","мой","тем","чтобы","нее","кажется","сейчас","были","куда","зачем","всех","никогда","можно","при","наконец","два","об","другой","хоть","после","над","больше","тот","через","эти","нас","про","всего","них","какая","много","разве","три","эту","моя","впрочем","хорошо","свою","этой","перед","иногда","лучше","чуть","том","нельзя","такой","им","более","всегда","конечно","всю","между"
+}
+
+# Lazy NLP components
+_nlp_loaded = False
+_segmenter = None
+_morph_vocab = None
+_morph_tagger = None
+_ru_stopwords = None
+
+
+def _ensure_nlp():
+    global _nlp_loaded, _segmenter, _morph_vocab, _morph_tagger, _ru_stopwords
+    if _nlp_loaded:
+        return
+    try:
+        import natasha as nlp
+        _segmenter = nlp.Segmenter()
+        _morph_vocab = nlp.MorphVocab()
+        emb = nlp.NewsEmbedding()
+        _morph_tagger = nlp.NewsMorphTagger(emb)
+    except Exception as e:
+        _append_log(f"[server] natasha load failed: {e}")
+        _segmenter = _morph_vocab = _morph_tagger = None
+    # Stopwords via NLTK with fallback
+    try:
+        import nltk
+        from nltk.corpus import stopwords
+        try:
+            _ru_stopwords = set(stopwords.words('russian'))
+        except LookupError:
+            nltk.download('stopwords', quiet=True)
+            _ru_stopwords = set(stopwords.words('russian'))
+    except Exception as e:
+        _append_log(f"[server] nltk stopwords failed: {e}")
+        _ru_stopwords = set(_RU_STOP)
+    _nlp_loaded = True
+
+
+def _preprocess_text_natasha(text: str) -> list[str]:
+    """Lemmatize Russian text using natasha, filter stopwords/punct/numbers.
+    Falls back to simple regex tokenization if natasha unavailable.
+    """
+    if not text:
+        return []
+    _ensure_nlp()
+    import string
+    tokens = re.findall(r"[\w\-]+", text.lower(), flags=re.UNICODE)
+    if _segmenter is not None and _morph_tagger is not None and _morph_vocab is not None:
+        try:
+            import natasha as nlp
+            doc = nlp.Doc(" ".join(tokens))
+            doc.segment(_segmenter)
+            doc.tag_morph(_morph_tagger)
+            for t in list(getattr(doc, 'tokens', []) or []):
+                t.lemmatize(_morph_vocab)
+            lemmas = [t.lemma for t in list(getattr(doc, 'tokens', []) or [])]
+        except Exception as e:
+            _append_log(f"[server] natasha processing failed, fallback: {e}")
+            lemmas = tokens
+    else:
+        lemmas = tokens
+    # Filters
+    punct = set(string.punctuation).union({"«","»","—","–","...","``","''","`","'","„","“","”"})
+    sw = _ru_stopwords or set(_RU_STOP)
+    result = []
+    for lemma in lemmas:
+        if not lemma or lemma in sw:
+            continue
+        if lemma.isdigit() or len(lemma) <= 2:
+            continue
+        if lemma in punct:
+            continue
+        result.append(lemma)
+    return result
+
+
+def _build_bar_figure(labels: list[str], values: list[float], title: str = "Histogram", orientation: str = "v"):
+    if orientation == "h":
+        bar = go.Bar(x=values, y=labels, orientation='h')
+        layout = go.Layout(title=title, xaxis_title="Count", yaxis_title="")
+    else:
+        bar = go.Bar(x=labels, y=values)
+        layout = go.Layout(title=title, xaxis_title="", yaxis_title="Count")
+    fig = go.Figure(data=[bar], layout=layout)
+    return fig
+
+
+@app.get("/charts/histogram")
+def get_histogram(kind: str, db: Optional[str] = None, text_field: str = "review_descr", bins: int = 20, top_n: int = 30, fmt: str = "json"): 
+    """
+    Return histogram data for the specified kind.
+    kind: one of [token_count, stars, likes, comments, year_usage, word_freq]
+    Returns: { labels: [..], values: [..], kind: str, field?: str }
+    """
+    db_path = _resolve_db_path(db)
+    try:
+        conn = _open_conn(db_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    try:
+        cur = conn.cursor()
+        if kind in ("stars", "likes", "comments", "year_usage"):
+            # numeric histogram with simple binning
+            cur.execute(f"SELECT {kind} FROM reviews WHERE {kind} IS NOT NULL")
+            vals = [row[0] for row in cur.fetchall() if isinstance(row[0], (int, float))]
+            if not vals:
+                return {"labels": [], "values": [], "kind": kind}
+            mn, mx = min(vals), max(vals)
+            if bins < 1:
+                bins = 10
+            if mn == mx:
+                labels = [str(mn)]
+                return {"labels": labels, "values": [len(vals)], "kind": kind}
+            width = (mx - mn) / bins
+            # Avoid zero width
+            width = width or 1
+            edges = [mn + i * width for i in range(bins)] + [mx]
+            counts = [0] * bins
+            for v in vals:
+                # find bin index
+                idx = int((v - mn) / width)
+                if idx >= bins:
+                    idx = bins - 1
+                counts[idx] += 1
+            labels = [f"{round(edges[i],2)}–{round(edges[i+1],2)}" for i in range(bins)]
+            if fmt == "plotly":
+                fig = _build_bar_figure(labels, counts, title=kind.replace('_',' ').title())
+                return {"figure": fig.to_plotly_json(), "kind": kind}
+            return {"labels": labels, "values": counts, "kind": kind}
+        elif kind == "token_count": 
+            # per-row token count of selected text field
+            if text_field not in ("review_descr", "title"):
+                text_field = "review_descr"
+            cur.execute(f"SELECT {text_field} FROM reviews WHERE {text_field} IS NOT NULL")
+            counts = Counter()
+            for (txt,) in cur.fetchall():
+                n = len(_tokenize(txt))
+                counts[n] += 1
+            # Sort by token count ascending
+            items = sorted(counts.items(), key=lambda x: x[0])
+            labels = [str(k) for k, _ in items]
+            values = [v for _, v in items]
+            if fmt == "plotly":
+                fig = _build_bar_figure(labels, values, title=f"Token Count ({text_field})")
+                return {"figure": fig.to_plotly_json(), "kind": kind, "field": text_field}
+            return {"labels": labels, "values": values, "kind": kind, "field": text_field}
+        elif kind == "word_freq":
+            if text_field not in ("review_descr", "title"):
+                text_field = "review_descr"
+            cur.execute(f"SELECT {text_field} FROM reviews WHERE {text_field} IS NOT NULL")
+            freq = Counter()
+            for (txt,) in cur.fetchall():
+                for lemma in _preprocess_text_natasha(txt):
+                    freq[lemma] += 1
+            items = freq.most_common(max(1, min(200, top_n)))
+            labels = [k for k, _ in items]
+            values = [v for _, v in items]
+            if fmt == "plotly":
+                fig = _build_bar_figure(labels, values, title=f"Word Frequency ({text_field})", orientation="h")
+                return {"figure": fig.to_plotly_json(), "kind": kind, "field": text_field}
+            return {"labels": labels, "values": values, "kind": kind, "field": text_field}
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown histogram kind: {kind}")
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 @app.get("/")

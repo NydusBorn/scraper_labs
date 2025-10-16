@@ -18,5 +18,19 @@ dependencies = [
     "uvicorn",
     "natasha",
     "plotly",
-    "nltk"
+    "nltk",
+    "opencv-python",
+    "duckdb",
+    "sqlglot",
+    "altair",
+    "vegafusion",
+    "vl-convert-python",
+    "ruff",
+    "python-lsp-server",
+    "websockets",
+    "pillow",
+    "scikit-image",
+    "scikit-learn",
+    "scikit-optimize",
+    "pywavelets"
 ]
